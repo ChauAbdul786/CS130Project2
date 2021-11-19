@@ -95,6 +95,11 @@ void clip_triangle(driver_state& state, const data_geometry& v0,
 void rasterize_triangle(driver_state& state, const data_geometry& v0,
     const data_geometry& v1, const data_geometry& v2)
 {
+    vec4 vertices[3];
+    vertices[0] = v0.gl_Position / v0.gl_Position[3];
+    vertices[1] = v1.gl_Position / v1.gl_Position[3];
+    vertices[2] = v2.gl_Position / v2.gl_Position[3];
+
     vec3 a = vec3(v0.gl_Position[0] / v0.gl_Position[3], v0.gl_Position[1] / v0.gl_Position[3], v0.gl_Position[2] / v0.gl_Position[3]);
     a[0] = (state.image_width - 1) * ((a[0] + 1) / 2);
     a[1] = (state.image_height - 1) * ((a[1] + 1) / 2);
@@ -116,12 +121,49 @@ void rasterize_triangle(driver_state& state, const data_geometry& v0,
             alpha = (0.5 * ((b[0] * c[1] - c[0] * b[1]) + (c[0] * p[1] - p[0] * c[1]) + (p[0] * b[1] - b[0] * p[1])) / area);
             beta = (0.5 * ((p[0] * c[1] - c[0] * p[1]) + (c[0] * a[1] - a[0] * c[1]) + (a[0] * p[1] - p[0] * a[1])) / area);
             gamma = (0.5 * ((b[0] * p[1] - p[0] * b[1]) + (p[0] * a[1] - a[0] * p[1]) + (a[0] * b[1] - b[0] * a[1])) / area);
-        
+
             if (((alpha >= 0) && (beta >= 0)) && (gamma >= 0)) {
-                state.image_color[i + j * state.image_width] = make_pixel(255, 255, 255); //Simply make white for now 
+                //state.image_color[i + j * state.image_width] = make_pixel(255, 255, 255); //Simply make white for now 
+                data_fragment df;
+                df.data = new float[MAX_FLOATS_PER_VERTEX];
+
+                for (int i = 0; i < state.floats_per_vertex; i++) {
+                    switch (state.interp_rules[i]) {
+                    case(interp_type::invalid):
+                        break;
+                    case(interp_type::flat):
+                        df.data[i] = v0.data[i];
+                        break;
+                    case(interp_type::smooth):
+                        float pointAlph, pointBet, pointGam;
+                        pointAlph = ((alpha / v0.gl_Position[3]) / ((alpha / v0.gl_Position[3]) + (beta / v1.gl_Position[3]) + (gamma / v2.gl_Position[3])));
+                        pointBet = ((beta / v1.gl_Position[3]) / ((alpha / v0.gl_Position[3]) + (beta / v1.gl_Position[3]) + (gamma / v2.gl_Position[3])));
+                        pointGam = ((gamma / v2.gl_Position[3]) / ((alpha / v0.gl_Position[3]) + (beta / v1.gl_Position[3]) + (gamma / v2.gl_Position[3])));
+
+                        df.data[i] = (v0.data[i] * pointAlph) + (v1.data[i] * pointBet) + (v2.data[i] * pointGam);
+                        break;
+                    case(interp_type::noperspective):
+                        df.data[i] = ((v0.data[i] * alpha) + (v1.data[i] * beta) + (v2.data[i] * gamma));
+                        break;
+                    }
+                }
+
+                data_output output;
+                state.fragment_shader(df, output, state.uniform_data);
+
+                float z;
+                z = (alpha * vertices[0][2]) + (beta * vertices[1][2]) + (gamma * vertices[2][2]);
+
+                if (z < state.image_depth[(state.image_width * j) + (i)]) {
+                    state.image_color[(state.image_width * j) + (i)] = make_pixel(255 * output.output_color[0], 255 * output.output_color[1], 255 * output.output_color[2]);
+                    state.image_depth[(state.image_width) * j + (i)] = z;
+                }
+
+                delete df.data;
             }
         }
     }
 
-    std::cout<<"TODO: implement rasterization"<<std::endl;
+    std::cout << "TODO: implement rasterization" << std::endl;
 }
+
