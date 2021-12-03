@@ -80,6 +80,54 @@ void render(driver_state& state, render_type type)
 void clip_triangle(driver_state& state, const data_geometry& v0,
     const data_geometry& v1, const data_geometry& v2,int face)
 {
+    if (face == 1) {
+        rasterize_triangle(state, v0, v1, v2);
+        return;
+    }
+
+    data_geometry one[3];
+    data_geometry two[3];
+
+    //Temp Floats
+    float Ta = 0;
+    float Tb1 = 0;
+    float Tb2 = 0;
+
+    vec4 p1;
+    vec4 p2;
+
+    vec4 a = (*v0).gl_Position;
+    vec4 b = (*v1).gl_Position;
+    vec4 c = (*v2).gl_Position;
+    
+    //Nothing to clip
+    if ((a[2] < -a[3]) && (b[2] < -b[3]) && (c[2] < -c[2])) {
+        return;
+    }
+
+    if ((a[2] < a[3]) && (b[2] >= b[3]) && (c[2] >= c[3])) {
+        one[0].data = new float[state.float_per_vertex];
+        one[1].data = *in[1];
+        one[2].data = *in[2];
+
+        Tb1 = (-b[3] - b[2]) / (a[2] + a[3] - b[3] - b[2]);
+        Tb2 = (-a[3] - a[2]) / (c[2] + c[3] - a[3] - a[2]);
+
+        p1 = Tb1 * a + (1 - Tb1) * b;
+        p2 = Tb2 * c + (1 - Tb2) * a;
+
+        for (int i = 0; i < state.floats_per_vertex; i++) {
+            switch (state.interp_rules[i]) {
+            case interp_type::flat:
+                one[0].data[i] = v0.data[i];
+                break;
+            
+            case interp_type::smooth:
+                one[0].data[i] = Tb2 
+            }
+        }
+    }
+
     if(face==6)
     {
         rasterize_triangle(state, v0, v1, v2);
